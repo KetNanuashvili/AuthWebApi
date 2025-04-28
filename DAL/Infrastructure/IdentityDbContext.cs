@@ -1,22 +1,13 @@
-﻿using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Project.Identity
 {
-    public class ApplicationUser : IdentityUser
-    {
-        public string FullName { get; set; }
-    }
+    public class ApplicationUser : IdentityUser { }
 
     public class IdentityDbContext : IdentityDbContext<ApplicationUser>
     {
-        public IdentityDbContext(DbContextOptions<IdentityDbContext> options) : base(options)
-        {
-        }
+        public IdentityDbContext(DbContextOptions<IdentityDbContext> options) : base(options) { }
     }
-
-
-
 }
-

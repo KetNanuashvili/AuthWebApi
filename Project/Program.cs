@@ -1,26 +1,50 @@
-﻿using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Authentication.JwtBearer; 
 using Microsoft.IdentityModel.Tokens;
-
-using System.Text;
 using Project.Business.Services;
 using Project.Identity;
+using System.Text;
+
+
+// Alias the custom IdentityDbContext to avoid conflict
+using ProjectIdentityDbContext = Project.Identity.IdentityDbContext;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddDbContext<IdentityDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
+builder.Services.AddDbContext<SubmissionDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("SubmissionConnection"),
     b => b.MigrationsAssembly("Project")));
+
+// Add Identity DbContext with alias
+builder.Services.AddDbContext<ProjectIdentityDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("IdentityConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorNumbersToAdd: null
+            );
+            sqlOptions.MigrationsAssembly("Project"); // >>> აქ დამატება აუცილებელია
+        }
+    )
+);
+
+builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
+    .AddEntityFrameworkStores<ProjectIdentityDbContext>() // Use aliased IdentityDbContext
+    .AddDefaultTokenProviders();
 
 builder.Services.AddScoped<TokenService>();
 
+// JWT Configuration
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]);
 
@@ -42,8 +66,24 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-
 var app = builder.Build();
+
+// Role initialization
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    string[] roleNames = { "User", "Admin" };
+
+    foreach (var roleName in roleNames)
+    {
+        var roleExists = await roleManager.RoleExistsAsync(roleName);
+        if (!roleExists)
+        {
+            await roleManager.CreateAsync(new IdentityRole(roleName));
+        }
+    }
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
